@@ -1,0 +1,40 @@
+{
+  "name": "gentrify",
+  "version": "0.1.0",
+  "description": "generator based async control flow",
+  "keywords": [
+    "async",
+    "flow",
+    "generator",
+    "coroutine"
+  ],
+  "devDependencies": {
+    "browserify": "^10.0.0",
+    "istanbul-harmony": "0",
+    "mocha": "^2.0.0",
+    "mz": "^1.0.2",
+    "request-promise": "*",
+    "request": "*",
+    "js-csp": "*",
+    "co": "*"
+  },
+  "scripts": {
+    "test": "mocha --harmony",
+    "test-cov": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha -- --reporter dot",
+    "test-travis": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha --report lcovonly -- --reporter dot",
+    "prepublish": "npm run browserify",
+    "browserify": "browserify gentrify.js -o ./gentrify-browser.js -s gentrify"
+  },
+  "files": [
+    "gentrify-browser.js",
+    "gentrify.js"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ganeshv/gentrify.git"
+  },
+  "engines": {
+    "node": ">= 6.1.0"
+  }
+}
