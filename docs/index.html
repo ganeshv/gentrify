@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>gentrify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/codeblock.css" media="screen">
+    <script src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.0.0/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="js/codeblock.js"></script>
+    <script src="js/gentrify-browser.js"></script>
+    <script src="js/co-browser.js"></script>
+  </head>
+  <body>
+    <section class="page-header">
+      <h1 class="project-name">gentrify</h1>
+      <h2 class="project-tagline">Urban redevelopment of Callback Hell</h2>
+      <a href="https://github.com/ganeshv/gentrify" class="btn">View on GitHub</a>
+      <a href="https://github.com/ganeshv/gentrify/zipball/master" class="btn">Download .zip</a>
+      <a href="https://github.com/ganeshv/gentrify/tarball/master" class="btn">Download .tar.gz</a>
+    </section>
+
+    <section class="main-content">
+      <h3>Introduction</h3>
+
+<p>Small, light, fast generator-based async control flow for ES6.
+<code>gentrified</code> code can invoke async functions as if they were
+synchronous. No more callback hell.</p>
+
+<p><code>gentrify</code> is only 40 lines, and fits nicely in your brain's L-1
+cache. It is about 10x lower overhead than similar solutions with promises.
+Async call stack depth can exceed a million without hitting stack overflow.
+Explicit tail calls are optimized.</p>
+
+<p>Async functions are written as generators and use the <code>yield</code>
+operator to toss async requests at the <code>gentrify</code> trampoline. Request
+types include other generators, promises and callback-based APIs, which are
+resolved and bounced back via the return value of <code>yield</code> Errors in
+async functions are thrown as exceptions in the caller.</p>
+
+<i>This project is an experiment; caveat user.</i>
+
+<h3>Examples</h3>
+
+<p>
+<em>NOTE: The examples below will only work on browsers which support a
+reasonable subset of ES6. As of late 2016 include desktop browsers like
+Chrome 53.0+, Firefox 48.0+ and Safari 10.0+</em>
+</p>
+
+<script>
+</script>
+<div class="codeblock">
+var topics = ["generator", "es6"];
+
+function* githubSearch(topics) {
+    for (var t of topics) {
+        // invoke a promise-based API
+        var data = yield $.getJSON(`https://api.github.com/search/repositories?q=${t}&sort=stars`);
+        console.log(data.items.slice(0, 5).map(x => `${x.full_name},${x.stargazers_count}`).join('\n'));
+        console.log("sleeping 3 seconds...");
+        // invoke another async function
+        yield sleep(3000);
+    }
+    return "done!";
+}
+
+function* sleep(ms) {
+    // invoke a callback-based API
+    return yield cb => setTimeout(cb, ms);
+}
+
+gentrify.run(githubSearch(topics))
+    .then(x => console.log(x))
+    .catch(x => console.log("Error", x));
+</div>
+<script>
+function sumn(x) {
+    return x <= 0 ? 0 : x + sumn(x - 1);
+}
+function now() {
+    return new Date().getTime();
+}
+function* sumn(x) {
+    return x <= 0 ? 0 : x + (yield sumn(x - 1));
+}
+function* tsumn(x, acc=0) {
+    return x <= 0 ? acc : gentrify.tc(tsumn(x - 1, acc + x));
+}
+</script>
+
+<h3>Performance</h3>
+
+<p>Consider a recursive (generator) function to compute the sum of the first
+<i>n</i> integers. This is not a real-world use case. The idea is to to
+measure the "sync tax" we pay for using such a library.</p>
+
+<pre>
+function* sumn(x) {
+    return x <= 0 ? 0 : x + (yield sumn(x - 1));
+}
+</pre>
+
+<p>Here we try the popular <a href="https://github.com/tj/co">co</a> library</p>
+<div class="codeblock">
+var n = 1000;
+var start = now();
+
+co(sumn(n)).then(x => console.log("co: ", x, now() - start, "ms"),
+    x => console.log("co: Boom!", x.message));
+</div>
+
+<p><code>gentrify</code> the same scenario</p>
+<div class="codeblock">
+var n = 1000;
+var start = now();
+
+gentrify.run(sumn(n)).then(x => console.log("gentrify: ", x,
+    now() - start, "ms"), x => console.log("gentrify: Boom!", x.message));
+</div>
+
+<h3>Stack Overflow</h3>
+
+<p>Try increasing the value of <code>n</code> in the above two examples. You'll
+find that <code>co</code> runs into a stack overflow (or a tab crash) at a
+little beyond 1500. <code>gentrify</code>continues well above a million.
+Eventually you run out of memory and get a tab crash.</p>
+
+<h3>Tail Call Optimization</h3>
+
+<p>With a tail-recursive version of <code>sumn()</code>, we can recurse to
+infinity and beyond. Wrapping the returned generator with
+<code>gentrify.tc()</code> explicitly tells <code>gentrify.run()</code> that
+the returned value should be treated as a tail call.</p>
+
+<pre>
+function* tsumn(x, acc=0) {
+    return x <= 0 ? acc : tc(tsumn(x - 1, acc + x));
+}
+</pre>
+<div class="codeblock">
+var n = 1000000;
+var start = now();
+
+gentrify.run(tsumn(n)).then(x => console.log("gentrify: ", x, now() - start,
+    "ms"), x => console.log("gentrify: Boom!", x.message));
+</div>
+
+<h3>Documentation</h3>
+
+<p>See <a href="https://github.com/ganeshv/gentrify">Github</a> for API
+documentation.
+
+<script>
+$(".codeblock").codeblock();
+</script>
+  <footer class="site-footer">
+    <span class="site-footer-owner"><a href="https://github.com/ganeshv/gentrify">gentrify</a> is maintained by <a href="https://github.com/ganeshv">ganeshv</a>.</span>
+
+    <span class="site-footer-credits">This page uses the <a href="https://github.com/jasonlong/cayman-theme">Cayman theme</a> by <a href="https://twitter.com/jasonlong">Jason Long</a>. Code blocks by <a href="http://ink.github.io/codeblock.js/">Codeblock.js</a>.</span>
+  </footer>
+
+    </section>
+
+  
+  </body>
+</html>
