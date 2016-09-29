@@ -1,5 +1,7 @@
 # gentrify
 
+[Browser demo](https://ganeshv.github.io/gentrify/)
+
 Small, light, fast generator-based async control flow for ES6. `gentrified`
 code can invoke async functions as if they were synchronous. No more callback
 hell.

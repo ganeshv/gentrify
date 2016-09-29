@@ -36,12 +36,6 @@ cache. It is about 10x lower overhead than similar solutions with promises.
 Async call stack depth can exceed a million without hitting stack overflow.
 Explicit tail calls are optimized.</p>
 
-<p>Async functions are written as generators and use the <code>yield</code>
-operator to toss async requests at the <code>gentrify</code> trampoline. Request
-types include other generators, promises and callback-based APIs, which are
-resolved and bounced back via the return value of <code>yield</code> Errors in
-async functions are thrown as exceptions in the caller.</p>
-
 <i>This project is an experiment; caveat user.</i>
 
 <h3>Examples</h3>
