@@ -2,7 +2,7 @@ const fs = require("fs"),
     rp = require("request-promise"),
     run = require("../gentrify").run;
 
-function* main(filename) {
+function* computePortfolio(filename) {
     /* call another "async function", i.e. generator object */
     const portfolio = yield getPortfolio(filename);
 
@@ -40,7 +40,7 @@ function* getQuote(sym) {
 }
 
 /* kick everything off */
-run(main("foo.csv"))
+run(computePortfolio("foo.csv"))
     .then(x => console.log("Portfolio value", x))
     .catch(x => console.log("Error", x));
 

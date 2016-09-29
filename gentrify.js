@@ -1,7 +1,11 @@
-module.exports = {run: run};
+module.exports = {run: run, tc: tc};
 
 /*
- * Run a generator
+ * Drive a generator, which may toss async ops like generators, promises,
+ * thunks to us via `yield`, which we get by calling `genObj.next()`.  We
+ * resolve the async request and bounce the result back via the next
+ * `genObj.next(res)`, which is received by `genObj` as the result of the
+ * `yield`.
  */
 
 function run(gen, cb) {
@@ -19,6 +23,11 @@ function run(gen, cb) {
                     const {value, done} = res instanceof Error ? g.throw(res) : g.next(res);
                     if (done) {
                         genstack.pop();
+                        if (isTailCall(value)) {
+                            genstack.push(value._gentrify_tc);
+                            res = undefined;
+                            continue;
+                        }
                         if (genstack.length === 0) return resolve(value);
                         res = value;
                     } else if (isGenerator(value)) {
@@ -27,7 +36,7 @@ function run(gen, cb) {
                     } else if (isPromise(value)) {
                         return value.then(x => step(x),
                             x => step(x instanceof Error ? x : new Error(x)));
-                    } else if (typeof value === 'function') {
+                    } else if (typeof value === 'function') { /* thunk */
                         return value((e, r) => step(e ? (e instanceof Error ?
                             e : new Error(e)) : r));
                     } else {
@@ -43,10 +52,23 @@ function run(gen, cb) {
     }
 }
 
+/*
+ * Wrap generator to signal to the trampoline that this is a tail call
+ */
+
+function tc(g) {
+    if (!isGenerator(g)) throw new Error("Only generators can be returned in tail calls");
+    return {_gentrify_tc: g};
+}
+
 function isGenerator(g) {
     return g && typeof g.next === 'function' && typeof g.throw === 'function';
 }
 
 function isPromise(p) {
     return p && typeof p.then === 'function';
+}
+
+function isTailCall(v) {
+    return v && isGenerator(v._gentrify_tc);
 }
