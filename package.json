@@ -1,12 +1,13 @@
 {
   "name": "gentrify",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "generator based async control flow",
   "keywords": [
     "async",
     "flow",
     "generator",
-    "coroutine"
+    "coroutine",
+    "tco"
   ],
   "devDependencies": {
     "browserify": "^10.0.0",
