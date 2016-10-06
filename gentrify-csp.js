@@ -1,0 +1,314 @@
+/*
+ * Drive a generator, which may toss async ops like generators, promises,
+ * thunks to us via `yield`, which we get by calling `genObj.next()`.  We
+ * resolve the async request and bounce the result back via the next
+ * `genObj.next(res)`, which is received by `genObj` as the result of the
+ * `yield`.
+ */
+
+function run(gen, cb) {
+    if (!isGenerator(gen)) throw new TypeError("Not a generator object");
+    return (typeof cb === 'function') ? _run(x => cb(null, x), cb) : new Promise(_run);
+
+    function _run(resolve, reject) {
+        const genstack = [gen];
+        return step();
+
+        function step(res) {
+            while (true) {
+                const g = genstack[genstack.length - 1];
+                try {
+                    const {value, done} = res instanceof Error ? g.throw(res) : g.next(res);
+                    if (done) {
+                        genstack.pop();
+                        if (isTailCall(value)) {
+                            genstack.push(value._gentrify_tc);
+                            res = undefined;
+                            continue;
+                        }
+                        if (genstack.length === 0) return resolve(value);
+                        res = value;
+                    } else if (isGenerator(value)) {
+                        res = undefined;
+                        genstack.push(value);
+                    } else if (isPromise(value)) {
+                        return value.then(x => step(x),
+                            x => step(x instanceof Error ? x : new Error(x)));
+                    } else if (isCSP(value)) {
+                        const cres = handle_csp(value, step);
+                        if (cres.type === "block") return;
+                        res = cres.value;
+                    } else if (typeof value === 'function') { /* thunk */
+                        return value((e, r) => step(e ? (e instanceof Error ?
+                            e : new Error(e)) : r));
+                    } else {
+                        throw new TypeError("Unsupported type yielded");
+                    }
+                } catch (e) {
+                    genstack.pop();
+                    if (genstack.length === 0) return reject(e);
+                    res = e;
+                }
+            }
+        }
+    }
+}
+
+/*
+ * Wrap generator to signal to the trampoline that this is a tail call
+ */
+
+function tc(g) {
+    if (!isGenerator(g)) throw new Error("Only generators can be returned in tail calls");
+    return {_gentrify_tc: g};
+}
+
+function isGenerator(g) {
+    return g && typeof g.next === 'function' && typeof g.throw === 'function';
+}
+
+function isPromise(p) {
+    return p && typeof p.then === 'function';
+}
+
+function isTailCall(v) {
+    return v && isGenerator(v._gentrify_tc);
+}
+
+function isCSP(v) {
+    return v instanceof ChanOp || v instanceof Channel;
+}
+
+function handle_csp(op, step) {
+    try {
+        const handler = step ? new Handler(step) : undefined;
+        if (op instanceof Channel) op = take(op);
+        switch (op.type) {
+            case "take":
+                return op.chan.take(handler);
+            case "put":
+                return op.chan.put(op.value, handler);
+            case "alts":
+                return do_alts(op.ops, op.opts, handler);
+            default:
+                throw new Error("Unknown CSP instruction ${op.type}");
+        }
+    } catch (e) {
+        return {type: "value", value: e};
+    }
+}
+
+function do_alts(oplist, opts, handler) {
+    if (oplist.length === 0) throw new Error("Empty alts list");
+
+    let res = {},
+        indexes = range(oplist.length),
+        priority = opts && opts.priority;
+
+    if (!priority) indexes = shuffle(indexes);
+
+    for (let i = 0; i < oplist.length; i++) {
+        const op = priority ? oplist[i] : oplist[indexes[i]],
+            ch = op instanceof Channel ? op : op[0];
+        res = op instanceof Channel ? ch.take(handler) : ch.put(op[1], handler);
+        if (res.type !== "block") {
+            return {type: "value", value: {channel: ch, value: res.value}};
+        }
+    }
+
+    /* nothing was ready */
+    if (opts && opts.default) {
+        handler.active = false;
+        return {type: "value", value: {channel: DEFAULT, value: opts.default}};
+    }
+    console.log("DO_ALTS", res);
+    return res;
+}
+
+const CLOSED = null;
+const DEFAULT = "xxx_def";
+const NO_VALUE = "xxx_novalue";
+
+class ChanOp {
+    constructor(opts) {
+        Object.assign(this, opts);
+    }
+}
+
+class Handler {
+    constructor(cb) {
+        this.active = true;
+        this.cb = cb;
+    }
+}
+
+class Channel {
+    constructor() {
+        this.takes = [];
+        this.puts = [];
+        this.closed = false;
+    }
+
+    put(value, handler) {
+        if (value === CLOSED) {
+            throw new Error("Cannot put CLOSED");
+        }
+        if (this.closed) {
+            return {type: "value", value: false};
+        }
+        while (this.takes.length) {
+            const taker = this.takes.shift();
+            if (!taker.active) continue;
+            if (handler) handler.active = false;
+            taker.active = false;
+            schedule(taker.cb, value);
+            return {type: "value", value: true};
+        }
+        if (handler) {
+            this.puts.push({handler: handler, value: value});
+            return {type: "block"};
+        }
+        return {type: "value", value: false};
+    }
+
+    take(handler) {
+        while (this.puts.length) {
+            const {handler: putter, value} = this.puts.shift();
+            if (!putter.active) continue;
+            putter.active = false;
+            schedule(putter.cb, true);
+            if (handler) handler.active = false;
+            return {type: "value", value: value};
+        }
+
+        if (this.closed) {
+            if (handler) {
+                handler.active = false;
+                return {type: "value", value: CLOSED};
+            }
+            return {type: "value", value: NO_VALUE};
+        }
+        if (handler) {
+            this.takes.push(handler);
+            return {type: "block"};
+        }
+        return {type: "value", value: NO_VALUE};
+    }
+
+    close() {
+        if (this.closed) return;
+        this.closed = true;
+
+        while (this.takes.length) {
+            const taker = this.takes.shift();
+            if (!taker.active) continue;
+            taker.active = false;
+            schedule(taker.cb, CLOSED);
+        }
+            
+        while (this.puts.length) {
+            const {handler: putter, value} = this.puts.shift();
+            if (!putter.active) continue;
+            putter.active = false;
+            schedule(putter.cb, false);
+        }
+    }
+}
+
+function chan() {
+    return new Channel();
+}
+
+function takeAsync(ch, cb) {
+    const ret = ch.take(new Handler(cb));
+    if (ret.type === "value") {
+        cb(ret.value);
+    }
+}
+
+function putAsync(ch, val, cb) {
+    cb = cb || (x => {});
+    const ret = ch.put(val, new Handler(cb));
+    if (ret.type === "value") {
+        cb(ret.value);
+    }
+}
+
+function put(ch, val) {
+    return new ChanOp({type: "put", chan: ch, value: val});
+}
+
+function take(ch) {
+    return new ChanOp({type: "take", chan: ch});
+}
+
+function offer(ch, value) {
+    const ret = ch.put(value);
+    return ret.value;
+}
+
+function poll(ch) {
+    const ret = ch.take();
+    return ret.value;
+}
+
+function alts(ops, opts) {
+    return new ChanOp({type: "alts", ops: ops, opts: opts});
+}
+
+function spawn(gen) {
+    const ch = chan();
+
+    run(gen, (err, res) => putAsync(ch, err || res, () => ch.close()));
+    return ch;
+}
+
+function go(gf, args=[]) {
+    return spawn(gf(...args));
+}
+
+function schedule(...args) {
+    setImmediate(...args);
+}
+
+function timeout(ms) {
+    const ch = chan();
+    setTimeout(() => ch.close(), ms);
+    return ch;
+}
+
+/* Utility functions */
+
+function range(n) {
+    return [...Array(n).keys()];
+}
+
+/* shuffle array in-place */
+function shuffle(list) {
+    for (let i = list.length - 1; i > 0; i--) {
+        let j = Math.floor(Math.random() * (i + 1));
+        [list[i], list[j]] = [list[j], list[i]];
+    }
+    return list;
+}
+
+module.exports = {
+    handle_csp: handle_csp,
+    ChanOp: ChanOp,
+    CLOSED: CLOSED,
+    DEFAULT: DEFAULT,
+    NO_VALUE: NO_VALUE,
+    chan: chan,
+    takeAsync: takeAsync,
+    putAsync: putAsync,
+    take: take,
+    put: put,
+    poll: poll,
+    offer: offer,
+    alts: alts,
+    go: go,
+    spawn: spawn,
+    timeout: timeout,
+    run: run,
+    tc: tc
+};
