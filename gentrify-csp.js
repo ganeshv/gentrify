@@ -81,15 +81,14 @@ function isCSP(v) {
 
 function handle_csp(op, step) {
     try {
-        const handler = step ? new Handler(step) : undefined;
         if (op instanceof Channel) op = take(op);
         switch (op.type) {
             case "take":
-                return op.chan.take(handler);
+                return op.chan.take(new Handler({active: true}, step));
             case "put":
-                return op.chan.put(op.value, handler);
+                return op.chan.put(op.value, new Handler({active: true}, step));
             case "alts":
-                return do_alts(op.ops, op.opts, handler);
+                return do_alts(op.ops, op.opts, step);
             default:
                 throw new Error("Unknown CSP instruction ${op.type}");
         }
@@ -98,18 +97,21 @@ function handle_csp(op, step) {
     }
 }
 
-function do_alts(oplist, opts, handler) {
+function do_alts(oplist, opts, step) {
     if (oplist.length === 0) throw new Error("Empty alts list");
 
     let res = {},
         indexes = range(oplist.length),
-        priority = opts && opts.priority;
+        priority = opts && opts.priority,
+        flag = {active: true};
 
     if (!priority) indexes = shuffle(indexes);
 
     for (let i = 0; i < oplist.length; i++) {
         const op = priority ? oplist[i] : oplist[indexes[i]],
-            ch = op instanceof Channel ? op : op[0];
+            ch = op instanceof Channel ? op : op[0],
+            handler = new Handler(flag, x => step({channel: ch, value: x}));
+
         res = op instanceof Channel ? ch.take(handler) : ch.put(op[1], handler);
         if (res.type !== "block") {
             return {type: "value", value: {channel: ch, value: res.value}};
@@ -118,10 +120,9 @@ function do_alts(oplist, opts, handler) {
 
     /* nothing was ready */
     if (opts && opts.default) {
-        handler.active = false;
+        flag.active = false; /* torpedo all handlers queued above */
         return {type: "value", value: {channel: DEFAULT, value: opts.default}};
     }
-    console.log("DO_ALTS", res);
     return res;
 }
 
@@ -136,9 +137,15 @@ class ChanOp {
 }
 
 class Handler {
-    constructor(cb) {
-        this.active = true;
+    constructor(flag, cb) {
+        this.flag = flag;
         this.cb = cb;
+    }
+    active() {
+        return this.flag.active;
+    }
+    deactivate() {
+        this.flag.active = false;
     }
 }
 
@@ -158,9 +165,9 @@ class Channel {
         }
         while (this.takes.length) {
             const taker = this.takes.shift();
-            if (!taker.active) continue;
-            if (handler) handler.active = false;
-            taker.active = false;
+            if (!taker.active()) continue;
+            if (handler) handler.deactivate();
+            taker.deactivate();
             schedule(taker.cb, value);
             return {type: "value", value: true};
         }
@@ -174,16 +181,16 @@ class Channel {
     take(handler) {
         while (this.puts.length) {
             const {handler: putter, value} = this.puts.shift();
-            if (!putter.active) continue;
-            putter.active = false;
+            if (!putter.active()) continue;
+            putter.deactivate();
             schedule(putter.cb, true);
-            if (handler) handler.active = false;
+            if (handler) handler.deactivate();
             return {type: "value", value: value};
         }
 
         if (this.closed) {
             if (handler) {
-                handler.active = false;
+                handler.deactivate();
                 return {type: "value", value: CLOSED};
             }
             return {type: "value", value: NO_VALUE};
@@ -201,15 +208,15 @@ class Channel {
 
         while (this.takes.length) {
             const taker = this.takes.shift();
-            if (!taker.active) continue;
-            taker.active = false;
+            if (!taker.active()) continue;
+            taker.deactivate();
             schedule(taker.cb, CLOSED);
         }
             
         while (this.puts.length) {
             const {handler: putter, value} = this.puts.shift();
-            if (!putter.active) continue;
-            putter.active = false;
+            if (!putter.active()) continue;
+            putter.deactivate();
             schedule(putter.cb, false);
         }
     }
@@ -220,7 +227,7 @@ function chan() {
 }
 
 function takeAsync(ch, cb) {
-    const ret = ch.take(new Handler(cb));
+    const ret = ch.take(new Handler({active: true}, cb));
     if (ret.type === "value") {
         cb(ret.value);
     }
@@ -228,7 +235,7 @@ function takeAsync(ch, cb) {
 
 function putAsync(ch, val, cb) {
     cb = cb || (x => {});
-    const ret = ch.put(val, new Handler(cb));
+    const ret = ch.put(val, new Handler({active: true}, cb));
     if (ret.type === "value") {
         cb(ret.value);
     }
