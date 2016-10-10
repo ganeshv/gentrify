@@ -24,7 +24,7 @@
     "test-cov": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha -- --reporter dot",
     "test-travis": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha --report lcovonly -- --reporter dot",
     "prepublish": "npm run browserify",
-    "browserify": "browserify gentrify.js -o ./gentrify-browser.js -s gentrify"
+    "browserify": "browserify gentrify-csp.js -o ./gentrify-browser.js -s gentrify"
   },
   "files": [
     "gentrify-browser.js",

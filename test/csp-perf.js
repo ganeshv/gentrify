@@ -33,8 +33,8 @@ function* runner(limit) {
 }
 
 
-describe('Ping pong - js-csp', function() {
-    let n = 10000;
+describe('Ping pong perf - js-csp', function() {
+    let n = 1000;
     csp = js_csp;
     this.slow(1);
     this.timeout(100000);
@@ -44,8 +44,8 @@ describe('Ping pong - js-csp', function() {
     });
 });
 
-describe('Ping pong - gentrify', function() {
-    let n = 10000;
+describe('Ping pong perf - gentrify', function() {
+    let n = 1000;
     csp = g_csp;
     this.slow(1);
     this.timeout(100000);

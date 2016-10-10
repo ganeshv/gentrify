@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="UTF-8">
+    <title>gentrify</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="stylesheets/normalize.css" media="screen">
+    <link href='https://fonts.googleapis.com/css?family=Open+Sans:400,700' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/codeblock.css" media="screen">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.0.0/ace.js" type="text/javascript" charset="utf-8"></script>
+    <script src="js/codeblock.js"></script>
+    <script src="js/gentrify-browser.js"></script>
+    <script src="js/co-browser.js"></script>
+
+    <style>
+    .output {
+        font-size: 48px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        background-color: #d0d0d0;
+        position: relative;
+        text-align: center;
+        padding: 1em;
+    }
+.arrow_box {
+    position: absolute;
+    background: #f0f0f0;
+    border: 2px solid #666;
+    border-radius: 3px;
+    font-size: 24px;
+    padding: 0.25em;
+}
+.arrow_box:after, .arrow_box:before {
+    top: 100%;
+    left: 50%;
+    border: solid transparent;
+    content: " ";
+    height: 0;
+    width: 0;
+    position: absolute;
+    pointer-events: none;
+}
+
+.arrow_box:after {
+    border-color: rgba(240, 240, 240, 0);
+    border-top-color: #f0f0f0;
+    border-width: 20px;
+    margin-left: -20px;
+}
+.arrow_box:before {
+    border-color: rgba(102, 102, 102, 0);
+    border-top-color: #666;
+    border-width: 23px;
+    margin-left: -23px;
+}
+
+    </style>
+  </head>
+  <body>
+    <section class="main-content">
+     <h1> Communicating Sequential Processes</h1>
+      <h3>Introduction</h3>
+
+<p><code>gentrify</code> now supports CSP channels, in the manner of <a
+href="https://github.com/ubolonton/js-csp">js-csp</a>, Clojurescript core.async
+and Go.</p>
+
+<h3>Examples</h3>
+
+<p>Tooltip example taken from <a href="http://twitter.com/jlongster">@jlongster</a>'s blog, <a href="http://jlongster.com/Taming-the-Asynchronous-Beast-with-CSP-in-JavaScript"> Taming the Asynchronous Beast with CSP in JavaScript</a></p>
+
+<pre>
+function listen(el, type, ch) {
+  ch = ch || chan();
+  el.addEventListener(type, function(e) {
+    csp.putAsync(ch, e);
+  });
+  return ch;
+}
+
+function listenQuery(parent, query, type) {
+  var ch = chan();
+  var els = Array.prototype.slice.call(parent.querySelectorAll(query));
+  els.forEach(function(el) {
+    listen(el, type, ch);
+  });
+  return ch;
+}
+
+function tooltip(el, content, cancel) {
+  return go(function*() {
+    var r = yield alts([cancel, timeout(500)]);
+
+    if(r.channel !== cancel) {
+      var tip = document.createElement('div');
+      tip.innerHTML = content;
+      tip.className = 'tip-up';
+      tip.style.left = el.offsetLeft - 110 + 'px';
+      tip.style.top = el.offsetTop + 75 + 'px';
+      el.parentNode.appendChild(tip);
+
+      yield take(cancel);
+      el.parentNode.removeChild(tip);
+    }
+  });
+}
+
+function menu(hoverch, outch) {
+  go(function*() {
+    while(true) {
+      var e = yield take(hoverch);
+      tooltip(e.target,
+              'a tip for ' + e.target.innerHTML,
+              outch);
+    }
+  });
+}
+
+var el = document.querySelector('#ui3');
+el.innerHTML = '<span>one</span> <span>two</span> <span>three</span>';
+
+menu(listenQuery(el, 'span', 'mouseover'),
+     listenQuery(el, 'span', 'mouseout'));
+</pre>
+
+<div class="output" id="ui3"></div>
+
+<script>
+
+const csp = gentrify,
+    chan = csp.chan,
+    go = csp.go,
+    spawn = csp.spawn,
+    put = csp.put,
+    take = csp.take,
+    poll = csp.poll,
+    offer = csp.offer,
+    alts = csp.alts,
+    takeAsync = csp.takeAsync,
+    putAsync = csp.putAsync,
+    timeout = csp.timeout,
+    CLOSED = csp.CLOSED,
+    NO_VALUE = csp.NO_VALUE,
+    DEFAULT = csp.DEFAULT,
+    run = csp.run;
+
+function listen(el, type, ch) {
+  ch = ch || chan();
+  el.addEventListener(type, function(e) {
+    csp.putAsync(ch, e);
+  });
+  return ch;
+}
+
+function listenQuery(parent, query, type) {
+  var ch = chan();
+  var els = Array.prototype.slice.call(parent.querySelectorAll(query));
+  els.forEach(function(el) {
+    listen(el, type, ch);
+  });
+  return ch;
+}
+
+function tooltip(el, content, cancel) {
+  return go(function*() {
+    var r = yield alts([cancel, timeout(500)]);
+
+    if(r.channel !== cancel) {
+      var tip = document.createElement('div');
+      tip.innerHTML = content;
+      tip.className = 'arrow_box';
+      tip.style.left = el.offsetLeft - 0 + 'px';
+      tip.style.top = el.offsetTop - 48 + 'px';
+      el.parentNode.appendChild(tip);
+
+      yield take(cancel);
+      el.parentNode.removeChild(tip);
+    }
+  });
+}
+
+function menu(hoverch, outch) {
+  go(function*() {
+    while(true) {
+      var e = yield take(hoverch);
+      tooltip(e.target,
+              'a tip for ' + e.target.innerHTML,
+              outch);
+    }
+  });
+}
+
+var el = document.querySelector('#ui3');
+el.innerHTML = '<span>one</span> <span>two</span> <span>three</span>';
+
+menu(listenQuery(el, 'span', 'mouseover'),
+     listenQuery(el, 'span', 'mouseout'));
+
+</script>

@@ -315,12 +315,33 @@ describe("alts", function() {
     });
 });
 
+describe("timeout", function() {
+    it("should close channel after timeout", function() {
+        return run(function* () {
+            const ms = 200,
+                start = new Date().getTime();
+            yield timeout(ms);
+            const now = new Date().getTime();
+            assert(now - start > ms * 0.95);
+        }());
+    });
+});
+
 describe("go", function() {
     it("should put return value on channel and close", function() {
         return run(function* () {
             let ch = go(function* (val) {
                     return val;
                 }, [42]);
+            assert((yield ch) === 42);
+            assert((yield ch) === CLOSED);
+        }());
+    });
+    it("should work without arguments", function() {
+        return run(function* () {
+            let ch = go(function* (val) {
+                    return 42;
+                });
             assert((yield ch) === 42);
             assert((yield ch) === CLOSED);
         }());
@@ -338,3 +359,4 @@ describe("spawn", function() {
         }());
     });
 });
+

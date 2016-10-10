@@ -274,8 +274,8 @@ function go(gf, args=[]) {
     return spawn(gf(...args));
 }
 
-function schedule(...args) {
-    setImmediate(...args);
+function schedule(f, ...args) {
+    setTimeout(() => f(...args), 0);
 }
 
 function timeout(ms) {
