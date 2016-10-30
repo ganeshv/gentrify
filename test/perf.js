@@ -1,6 +1,6 @@
 const assert = require('assert');
-const run = require('../gentrify').run;
-const tc = require('../gentrify').tc;
+const run = require('../lib/gentrify').run;
+const tc = require('../lib/gentrify').tc;
 const co = require('co');
 const csp = require('js-csp');
 

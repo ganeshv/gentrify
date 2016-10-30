@@ -10,25 +10,36 @@
     "tco"
   ],
   "devDependencies": {
+    "babel-cli": "^6.18.0",
+    "babel-polyfill": "^6.16.0",
+    "babel-preset-es2015": "^6.18.0",
+    "babel-preset-latest": "^6.16.0",
+    "babel-preset-latest-minimal": "^1.1.2",
+    "babelify": "^7.3.0",
     "browserify": "^10.0.0",
+    "co": "*",
     "istanbul-harmony": "0",
+    "js-csp": "*",
     "mocha": "^2.0.0",
     "mz": "^1.0.2",
-    "request-promise": "*",
     "request": "*",
-    "js-csp": "*",
-    "co": "*"
+    "request-promise": "*"
   },
   "scripts": {
+    "clean": "rm -rf lib gentrify-browser.js",
     "test": "mocha --harmony",
     "test-cov": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha -- --reporter dot",
     "test-travis": "node --harmony node_modules/.bin/istanbul cover ./node_modules/.bin/_mocha --report lcovonly -- --reporter dot",
-    "prepublish": "npm run browserify",
-    "browserify": "browserify gentrify-csp.js -o ./gentrify-browser.js -s gentrify"
+    "build:node": "babel --presets latest-minimal -d lib src",
+    "build:browser": "browserify src/gentrify.js -o ./gentrify-browser.js -s gentrify -t [ babelify --presets [ es2015 ] ]",
+    "build": "npm run build:node && npm run build:browser",
+    "prepublish": "npm run browserify"
   },
   "files": [
     "gentrify-browser.js",
-    "gentrify.js"
+    "lib",
+    "src",
+    "README.md"
   ],
   "license": "MIT",
   "repository": {

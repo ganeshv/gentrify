@@ -1,6 +1,6 @@
 const fs = require("fs"),
     rp = require("request-promise"),
-    run = require("../gentrify").run;
+    run = require("../lib/gentrify").run;
 
 function* computePortfolio(filename) {
     /* call another "async function", i.e. generator object */

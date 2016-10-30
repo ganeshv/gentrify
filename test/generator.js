@@ -1,5 +1,5 @@
 const assert = require('assert');
-const run = require('../gentrify').run;
+const run = require('../lib/gentrify').run;
 
 function ajax_get(url, error, cb) {
     return cb ? _ajax_get(x => cb(null, x), cb) : new Promise(_ajax_get);

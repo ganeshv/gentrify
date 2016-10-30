@@ -1,7 +1,7 @@
 const assert = require('assert');
 const co = require('co');
 const js_csp = require('js-csp');
-const g_csp = require('../gentrify-csp');
+const g_csp = require('../lib/gentrify').csp;
 let csp;
 
 function* player(name, table, limit) {

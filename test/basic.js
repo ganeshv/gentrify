@@ -1,5 +1,5 @@
 const assert = require('assert');
-const run = require('../gentrify').run;
+const run = require('../lib/gentrify').run;
 
 describe("gentrify - basic API", basic_api);
 

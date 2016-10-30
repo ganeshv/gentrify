@@ -1,5 +1,5 @@
 const fs = require("fs"),
-    csp = require("./gentrify-csp");
+    csp = require("../lib/gentrify").csp;
     //csp = require("js-csp");
 
 

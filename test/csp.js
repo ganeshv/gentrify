@@ -1,5 +1,6 @@
 const assert = require('assert');
-const csp = require('../gentrify-csp'),
+const gentrify = require('../lib/gentrify'),
+    csp = gentrify.csp,
     chan = csp.chan,
     go = csp.go,
     spawn = csp.spawn,
@@ -14,7 +15,7 @@ const csp = require('../gentrify-csp'),
     CLOSED = csp.CLOSED,
     NO_VALUE = csp.NO_VALUE,
     DEFAULT = csp.DEFAULT,
-    run = csp.run;
+    run = gentrify.run;
 
 describe("put", function() {
     it("should block if there are no takers", function(done) {
